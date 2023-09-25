@@ -10,6 +10,11 @@ import logging
 SEGMENT_ID = ""
 METRIC_ID = ""
 PRIVATE_API_KEY = ""
+HEADERS = {
+    "accept": "application/json",
+    "revision": "2023-09-15",
+    "Authorization": f"Klaviyo-API-Key {PRIVATE_API_KEY}",
+}
 logging.basicConfig(filename='script.log', filemode='w',
                     format='%(name)s - %(levelname)s - %(message)s')
 
@@ -18,22 +23,14 @@ profile_count = 0
 # Helper methods
 
 
-def set_headers():
-    headers = {
-        "accept": "application/json",
-        "revision": "2023-09-15",
-        "Authorization": f"Klaviyo-API-Key {PRIVATE_API_KEY}",
-    }
-    return headers
 
 
 def get_segment_profiles(cursor=""):
     print('get profiles', time())
     global current_cursor
-    headers = set_headers()
     # Handling for non 200 response
     try:
-        response = requests.get(cursor, headers=headers)
+        response = requests.get(cursor, headers=HEADERS)
         response.raise_for_status()  # Raises an exception for non-200 responses
         data = response.json().get('data')
         links = response.json().get('links').get('next')
@@ -60,12 +57,11 @@ def get_segment_profiles(cursor=""):
 def get_properties_of_first_event_for_profile(profile_id, metric_id):
     # print('get events', time.time())
     url = f"https://a.klaviyo.com/api/events/?filter=equals(profile_id,'{profile_id}'),and(equals(metric_id,'{metric_id}'))&sort=datetime&page[size]=1"
-    headers = set_headers()
     response = ''
     data = ''
     # Handling non 200 response & logging
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=HEADERS)
         response.raise_for_status()
         data = response.json().get('data')
     except requests.exceptions.HTTPError as e:
@@ -85,6 +81,8 @@ def get_properties_of_first_event_for_profile(profile_id, metric_id):
         event_properties = data[0]["attributes"]["event_properties"]
         event_items = event_properties.get("Items")
         event_value = event_properties.get("$value")
+        #added in rounding to 2dp
+        event_value = round(float(event_value), 2)
         first_purchase_date = event_properties.get(
             '$extra').get('created_at')[:10]
         return {
@@ -97,26 +95,28 @@ def get_properties_of_first_event_for_profile(profile_id, metric_id):
         logging.error('Data missing for %s', profile_id)
     return {}
 
-
-def set_properties_for_profile(profile_id, properties):
-    url = f"https://a.klaviyo.com/api/profiles/{profile_id}"
-    headers = set_headers()
-    payload = {"data": {
-        "type": "profile",
-        "id": f"{profile_id}",
-        "attributes": {
+def update_profile_payload(profile_id, properties):
+    payload = {
+        "data": {
+            "type": "profile",
+            "id": profile_id,
+            "attributes": {
                 "properties": properties
+            }
         }
     }
-    }
+    return payload
+
+def set_properties_for_profile(profile_id, payload):
+    url = f"https://a.klaviyo.com/api/profiles/{profile_id}"
     try:
-        response = requests.patch(url, json=payload, headers=headers)
+        response = requests.patch(url, json=payload, headers=HEADERS)
         if(response.status_code != 200):
             logging.error('Update error %s ', response.status_code)
             logging.error('Reponse is %s', response.json())
     except:
         logging.error('something went wrong with %s %s',
-                      profile_id, properties)
+                      profile_id, payload)
 
     global profile_count
     profile_count = profile_count + 1
@@ -125,7 +125,7 @@ def set_properties_for_profile(profile_id, properties):
 
 def threaded_update(profile_id, metric_id):
     new_properties = get_properties_of_first_event_for_profile(
-        profile_id, METRIC_ID)
+        profile_id, metric_id)
     if new_properties and isinstance(new_properties, dict) and new_properties:
         # Check if new_properties is not None, is a dictionary, and not empty
         set_properties_for_profile(profile_id, new_properties)
