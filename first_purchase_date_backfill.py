@@ -23,8 +23,6 @@ profile_count = 0
 # Helper methods
 
 
-
-
 def get_segment_profiles(cursor=""):
     print('get profiles', time())
     global current_cursor
@@ -78,10 +76,10 @@ def get_properties_of_first_event_for_profile(profile_id, metric_id):
         # DATA MAY BE NESTED DIFFERENTLY FOR YOUR PLACED ORDER EVENT - MAKE CHANGES AS REQUIRED
         # Use POSTMAN to Evaluate with a GET request using the URL above
         # print(event_properties)
-        event_properties = data[0]["attributes"]["event_properties"]
+        event_properties = data[0]["attributes"].get("event_properties")
         event_items = event_properties.get("Items")
         event_value = event_properties.get("$value")
-        #added in rounding to 2dp
+        # added in rounding to 2dp
         event_value = round(float(event_value), 2)
         first_purchase_date = event_properties.get(
             '$extra').get('created_at')[:10]
@@ -95,8 +93,9 @@ def get_properties_of_first_event_for_profile(profile_id, metric_id):
         logging.error('Data missing for %s', profile_id)
     return {}
 
+
 def update_profile_payload(profile_id, properties):
-    payload = {
+    return {
         "data": {
             "type": "profile",
             "id": profile_id,
@@ -105,10 +104,11 @@ def update_profile_payload(profile_id, properties):
             }
         }
     }
-    return payload
 
-def set_properties_for_profile(profile_id, payload):
+
+def set_properties_for_profile(profile_id, properties):
     url = f"https://a.klaviyo.com/api/profiles/{profile_id}"
+    payload = update_profile_payload(profile_id, properties)
     try:
         response = requests.patch(url, json=payload, headers=HEADERS)
         if(response.status_code != 200):
