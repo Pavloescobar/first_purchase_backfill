@@ -132,6 +132,9 @@ def threaded_update(profile_id, metric_id):
     else:
         print(
             f"Skipping profile {profile_id} due to invalid or empty properties")
+        logging.error(
+            f'Skipping profile, {profile_id} due to invalid or empty properties')
+
 
 # Main script execution
 
